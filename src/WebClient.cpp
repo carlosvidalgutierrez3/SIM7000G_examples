@@ -23,16 +23,7 @@
 // Set serial for debug console (to the Serial Monitor, default speed 115200)
 #define SerialMon Serial
 
-// Set serial for AT commands (to the module)
-// Use Hardware Serial on Mega, Leonardo, Micro
-#ifndef __AVR_ATmega328P__
 #define SerialAT Serial1
-
-// or Software Serial on Uno, Nano
-#else
-#include <SoftwareSerial.h>
-SoftwareSerial SerialAT(2, 3);  // RX, TX
-#endif
 
 // Increase RX buffer to capture the entire response
 // Chips without internal buffering (A6/A7, ESP8266, M590)
@@ -47,12 +38,6 @@ SoftwareSerial SerialAT(2, 3);  // RX, TX
 
 // Define the serial console for debug prints, if needed
 #define TINY_GSM_DEBUG SerialMon
-
-// Range to attempt to autobaud
-// NOTE:  DO NOT AUTOBAUD in production code.  Once you've established
-// communication, set a fixed baud rate using modem.setBaud(#).
-#define GSM_AUTOBAUD_MIN 9600
-#define GSM_AUTOBAUD_MAX 115200
 
 // Add a reception delay, if needed.
 // This may be needed for a fast processor at a slow baud rate.
@@ -84,20 +69,6 @@ const char resource[] = "/TinyGSM/logo.txt";
 
 #include <TinyGsmClient.h>
 
-// Just in case someone defined the wrong thing..
-#if TINY_GSM_USE_GPRS && not defined TINY_GSM_MODEM_HAS_GPRS
-#undef TINY_GSM_USE_GPRS
-#undef TINY_GSM_USE_WIFI
-#define TINY_GSM_USE_GPRS false
-#define TINY_GSM_USE_WIFI true
-#endif
-#if TINY_GSM_USE_WIFI && not defined TINY_GSM_MODEM_HAS_WIFI
-#undef TINY_GSM_USE_GPRS
-#undef TINY_GSM_USE_WIFI
-#define TINY_GSM_USE_GPRS true
-#define TINY_GSM_USE_WIFI false
-#endif
-
 #ifdef DUMP_AT_COMMANDS
 #include <StreamDebugger.h>
 StreamDebugger debugger(SerialAT, SerialMon);
@@ -126,16 +97,9 @@ void setup() {
   digitalWrite(PWR_PIN, HIGH);
   delay(1500);
   digitalWrite(PWR_PIN, LOW);
-  SerialMon.println("Reset, enable, power pins set!");
-  delay(1000);
 
   SerialMon.println("Wait...");
 
-  SerialMon.println("Setting GSM module baud rate with SerialAT.begin(1,2,3,4)");
-  // Set GSM module baud rate
-  // TinyGsmAutoBaud(SerialAT, GSM_AUTOBAUD_MIN, GSM_AUTOBAUD_MAX);
-  //SerialAT.begin(115200);
-  //SerialAT.begin(UART_BAUD, SERIAL_8N1, PIN_RX, PIN_TX);
   delay(6000);
 
   // Restart takes quite some time
