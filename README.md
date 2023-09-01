@@ -9,4 +9,4 @@ Sometimes you might mess up with the modem, you need to execute the [*ResetModem
 I have also found that sometimes flashing the code [*Arduino_NetworkTest*](https://github.com/Xinyuan-LilyGO/LilyGO-T-SIM7000G/tree/master/examples/Arduino_NetworkTest) can also "reset" the board and make it work again. 
 
 ## Hardware
-[LILYGO T-SIM7000G](https://github.com/Xinyuan-LilyGO/LilyGO-T-SIM7000G)
+[LILYGO T-SIM7000G](https://github.com/Xinyuan-LilyGO/LilyGO-T-SIM7000G).
