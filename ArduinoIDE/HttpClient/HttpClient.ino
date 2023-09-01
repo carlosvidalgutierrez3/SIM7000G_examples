@@ -1,15 +1,22 @@
-
 /**************************************************************
  *
  * This sketch connects to a website and downloads a page.
  * It can be used to perform HTTP/RESTful API calls.
  *
+ * For this example, you need to install ArduinoHttpClient library:
+ *   https://github.com/arduino-libraries/ArduinoHttpClient
+ *   or from http://librarymanager/all#ArduinoHttpClient
+ *
  * TinyGSM Getting Started guide:
  *   https://tiny.cc/tinygsm-readme
  *
+ * For more HTTP API examples, see ArduinoHttpClient library
+ *
+ * NOTE: This example may NOT work with the XBee because the
+ * HttpClient library does not empty to serial buffer fast enough
+ * and the buffer overflow causes the HttpClient library to stall.
+ * Boards with faster processors may work, 8MHz boards will not.
  **************************************************************/
-#include <Arduino.h>
-
 #define UART_BAUD           115200
 #define PIN_DTR             25
 #define PIN_TX              27
@@ -17,13 +24,41 @@
 #define PWR_PIN             4
 
 // Select your modem:
+// #define TINY_GSM_MODEM_SIM800
+// #define TINY_GSM_MODEM_SIM808
+// #define TINY_GSM_MODEM_SIM868
+// #define TINY_GSM_MODEM_SIM900
 #define TINY_GSM_MODEM_SIM7000
 // #define TINY_GSM_MODEM_SIM7000SSL
+// #define TINY_GSM_MODEM_SIM7080
+// #define TINY_GSM_MODEM_SIM5360
+// #define TINY_GSM_MODEM_SIM7600
+// #define TINY_GSM_MODEM_UBLOX
+// #define TINY_GSM_MODEM_SARAR4
+// #define TINY_GSM_MODEM_M95
+// #define TINY_GSM_MODEM_BG96
+// #define TINY_GSM_MODEM_A6
+// #define TINY_GSM_MODEM_A7
+// #define TINY_GSM_MODEM_M590
+// #define TINY_GSM_MODEM_MC60
+// #define TINY_GSM_MODEM_MC60E
+// #define TINY_GSM_MODEM_ESP8266
+// #define TINY_GSM_MODEM_XBEE
+// #define TINY_GSM_MODEM_SEQUANS_MONARCH
 
 // Set serial for debug console (to the Serial Monitor, default speed 115200)
 #define SerialMon Serial
 
+// Set serial for AT commands (to the module)
+// Use Hardware Serial on Mega, Leonardo, Micro
+#ifndef __AVR_ATmega328P__
 #define SerialAT Serial1
+
+// or Software Serial on Uno, Nano
+#else
+#include <SoftwareSerial.h>
+SoftwareSerial SerialAT(2, 3);  // RX, TX
+#endif
 
 // Increase RX buffer to capture the entire response
 // Chips without internal buffering (A6/A7, ESP8266, M590)
@@ -38,16 +73,14 @@
 
 // Define the serial console for debug prints, if needed
 #define TINY_GSM_DEBUG SerialMon
+// #define LOGGING  // <- Logging is for the HTTP library
 
 // Add a reception delay, if needed.
 // This may be needed for a fast processor at a slow baud rate.
 // #define TINY_GSM_YIELD() { delay(2); }
 
-// Uncomment this if you want to use SSL
-// #define USE_SSL
-
-// Define how you're planning to connect to the internet.
-// This is only needed for this example, not in other code.
+// Define how you're planning to connect to the internet
+// These defines are only for this example; they are not needed in other code.
 #define TINY_GSM_USE_GPRS true
 #define TINY_GSM_USE_WIFI false
 
@@ -55,7 +88,7 @@
 #define GSM_PIN ""
 
 // Your GPRS credentials, if any
-const char apn[]      = "iot.1nce.net";
+const char apn[]      = "YourAPN";
 const char gprsUser[] = "";
 const char gprsPass[] = "";
 
@@ -66,8 +99,24 @@ const char wifiPass[] = "YourWiFiPass";
 // Server details
 const char server[]   = "vsh.pp.ua";
 const char resource[] = "/TinyGSM/logo.txt";
+const int  port       = 80;
 
 #include <TinyGsmClient.h>
+#include <ArduinoHttpClient.h>
+
+// Just in case someone defined the wrong thing..
+#if TINY_GSM_USE_GPRS && not defined TINY_GSM_MODEM_HAS_GPRS
+#undef TINY_GSM_USE_GPRS
+#undef TINY_GSM_USE_WIFI
+#define TINY_GSM_USE_GPRS false
+#define TINY_GSM_USE_WIFI true
+#endif
+#if TINY_GSM_USE_WIFI && not defined TINY_GSM_MODEM_HAS_WIFI
+#undef TINY_GSM_USE_GPRS
+#undef TINY_GSM_USE_WIFI
+#define TINY_GSM_USE_GPRS true
+#define TINY_GSM_USE_WIFI false
+#endif
 
 #ifdef DUMP_AT_COMMANDS
 #include <StreamDebugger.h>
@@ -77,13 +126,8 @@ TinyGsm        modem(debugger);
 TinyGsm        modem(SerialAT);
 #endif
 
-#ifdef USE_SSL
-TinyGsmClientSecure client(modem);
-const int           port = 443;
-#else
-TinyGsmClient  client(modem);
-const int      port = 80;
-#endif
+TinyGsmClient client(modem);
+HttpClient    http(client, server, port);
 
 void setup() {
   // Set console baud rate
@@ -91,15 +135,14 @@ void setup() {
   SerialAT.begin(UART_BAUD, SERIAL_8N1, PIN_RX, PIN_TX);
   delay(1000);
 
-  pinMode(PWR_PIN, OUTPUT);
-  
   //Launch SIM7000
   digitalWrite(PWR_PIN, HIGH);
   delay(1500);
   digitalWrite(PWR_PIN, LOW);
+  SerialMon.println("Reset, enable, power pins set!");
+  delay(1000);
 
   SerialMon.println("Wait...");
-
   delay(6000);
 
   // Restart takes quite some time
@@ -159,36 +202,48 @@ void loop() {
   if (modem.isGprsConnected()) { SerialMon.println("GPRS connected"); }
 #endif
 
-  SerialMon.print("Connecting to ");
-  SerialMon.println(server);
-  if (!client.connect(server, port)) {
-    SerialMon.println(" fail");
+  SerialMon.print(F("Performing HTTP GET request... "));
+  int err = http.get(resource);
+  if (err != 0) {
+    SerialMon.println(F("failed to connect"));
     delay(10000);
     return;
   }
-  SerialMon.println(" success");
 
-  // Make a HTTP GET request:
-  SerialMon.println("Performing HTTP GET request...");
-  client.print(String("GET ") + resource + " HTTP/1.1\r\n");
-  client.print(String("Host: ") + server + "\r\n");
-  client.print("Connection: close\r\n\r\n");
-  client.println();
-
-  uint32_t timeout = millis();
-  while (client.connected() && millis() - timeout < 10000L) {
-    // Print available data
-    while (client.available()) {
-      char c = client.read();
-      SerialMon.print(c);
-      timeout = millis();
-    }
+  int status = http.responseStatusCode();
+  SerialMon.print(F("Response status code: "));
+  SerialMon.println(status);
+  if (!status) {
+    delay(10000);
+    return;
   }
-  SerialMon.println();
+
+  SerialMon.println(F("Response Headers:"));
+  while (http.headerAvailable()) {
+    String headerName  = http.readHeaderName();
+    String headerValue = http.readHeaderValue();
+    SerialMon.println("    " + headerName + " : " + headerValue);
+  }
+
+  int length = http.contentLength();
+  if (length >= 0) {
+    SerialMon.print(F("Content length is: "));
+    SerialMon.println(length);
+  }
+  if (http.isResponseChunked()) {
+    SerialMon.println(F("The response is chunked"));
+  }
+
+  String body = http.responseBody();
+  SerialMon.println(F("Response:"));
+  SerialMon.println(body);
+
+  SerialMon.print(F("Body length is: "));
+  SerialMon.println(body.length());
 
   // Shutdown
 
-  client.stop();
+  http.stop();
   SerialMon.println(F("Server disconnected"));
 
 #if TINY_GSM_USE_WIFI
